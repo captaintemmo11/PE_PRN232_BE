@@ -1,11 +1,9 @@
 const { admin, db, bucket } = require('../firebase');
-const { db, bucket } = require('../firebase');
 const { v4: uuidv4 } = require('uuid');
 
 const moviesCollection = db.collection('movies');
 
 async function uploadPoster(buffer, originalName, mimeType) {
-  // create file name
   const filename = `posters/${Date.now()}_${uuidv4()}_${originalName}`;
   const file = bucket.file(filename);
 
@@ -14,20 +12,18 @@ async function uploadPoster(buffer, originalName, mimeType) {
     resumable: false
   });
 
-  // Make public URL (alternatively use signed URLs)
   await file.makePublic();
   return `https://storage.googleapis.com/${bucket.name}/${filename}`;
 }
 
 exports.listMovies = async (req, res) => {
   try {
-    const { q, genre, sort = 'createdAt', order = 'desc', limit = 20, page = 1 } = req.query;
+    const { q, genre, sort = 'createdAt', order = 'desc', limit = 20 } = req.query;
     let query = moviesCollection;
 
     if (genre) query = query.where('genre', '==', genre);
 
-    // Basic ordering
-    if (sort === 'rating' || sort === 'title' || sort === 'createdAt') {
+    if (['rating', 'title', 'createdAt'].includes(sort)) {
       query = query.orderBy(sort, order);
     } else {
       query = query.orderBy('createdAt', 'desc');
@@ -36,10 +32,9 @@ exports.listMovies = async (req, res) => {
     const snapshot = await query.limit(Number(limit)).get();
     let results = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Simple substring search on title (client-side filter)
     if (q) {
       const qLower = q.toString().toLowerCase();
-      results = results.filter(m => (m.title && m.title.toLowerCase().includes(qLower)));
+      results = results.filter(m => m.title && m.title.toLowerCase().includes(qLower));
     }
 
     res.json({ data: results });
@@ -67,7 +62,6 @@ exports.createMovie = async (req, res) => {
 
     let finalPosterUrl = posterUrl || null;
 
-    // if a file was uploaded
     if (req.file) {
       finalPosterUrl = await uploadPoster(req.file.buffer, req.file.originalname, req.file.mimetype);
     }
